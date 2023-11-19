@@ -1,3 +1,4 @@
+use crate::tcp_message::{TcpMessage, TcpMessageError};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::process::{Command, Stdio};
@@ -5,26 +6,27 @@ use std::str::{self, Utf8Error};
 use std::sync::Arc;
 use std::thread;
 
-use crate::tcp_message::TcpMessage;
-
 pub fn connect(stream: TcpStream) -> Result<(), ClientError> {
+    println!("✔");
+    let address = stream.local_addr()?;
     let stream = Arc::new(stream);
 
-    let read_stream = stream.clone();
-
-    thread::spawn(move || {
+    let print_stream = stream.clone();
+    let print_thread = thread::spawn(move || -> Result<(), ClientError> {
         let mut buf = [0u8; 1024];
-        loop {
-            match read_stream.as_ref().read(&mut buf) {
-                Ok(bytes) => {
-                    let msg = TcpMessage::from_bytes(&buf[0..bytes]);
 
-                    println!("{:?}", msg);
+        loop {
+            let bytes = print_stream.as_ref().read(&mut buf)?;
+            let msg = TcpMessage::from_bytes(&buf[0..bytes])?;
+
+            if msg.get_address() == address {
+                println!("** {:?}", msg);
+
+                if msg.is_leaving() {
+                    return Ok(());
                 }
-                Err(err) => {
-                    println!("Unable to read from stream. Breaking read-loop. {}", err);
-                    break;
-                }
+            } else {
+                println!("-- {:?}", msg);
             }
         }
     });
@@ -35,16 +37,17 @@ pub fn connect(stream: TcpStream) -> Result<(), ClientError> {
         buf.truncate(buf.len() - 2);
 
         let msg = if buf.len() == 0 {
-            TcpMessage::Nothing
+            TcpMessage::Nothing(address)
         } else if buf == ".exit" {
-            TcpMessage::Leaving
+            TcpMessage::Leaving(address)
         } else {
-            TcpMessage::Chat(buf.clone())
+            TcpMessage::Chat(address, buf.clone())
         };
 
-        if let Err(_) = stream.as_ref().write(&msg.to_bytes()) {}
+        stream.as_ref().write(&msg.to_bytes()?)?;
 
-        if msg == TcpMessage::Leaving {
+        if msg.is_leaving() {
+            print_thread.join().expect("🦄")?;
             break;
         }
     }
@@ -58,6 +61,7 @@ pub enum ClientError {
     Conversion(Utf8Error),
     StdoutGrabError,
     UnknownServerMessage(String),
+    Message(TcpMessageError),
 }
 
 impl From<io::Error> for ClientError {
@@ -72,13 +76,24 @@ impl From<Utf8Error> for ClientError {
     }
 }
 
+impl From<TcpMessageError> for ClientError {
+    fn from(err: TcpMessageError) -> ClientError {
+        return ClientError::Message(err);
+    }
+}
+
 fn spawn_server(port: u16) -> Result<TcpStream, ClientError> {
     let path = "C:\\Users\\stefan\\git\\rust\\bread\\target\\debug\\";
-    let command = format!("{path}bread.exe serve --port {port} --shutdown-after-last --silent");
+    let command =
+        format!("{path}bread serve --port {port} --shutdown-after-last --silent --print-port");
+
     let mut child = Command::new("cmd")
         .args(&["/C", &command])
         .stdout(Stdio::piped())
+        // .stderr(Stdio::null())
         .spawn()?;
+
+    // child.stderr.take();
 
     let mut stdout = child.stdout.take().ok_or(ClientError::StdoutGrabError)?;
     let mut buf = [0; 1000];
@@ -96,7 +111,10 @@ fn spawn_server(port: u16) -> Result<TcpStream, ClientError> {
         }
     }
 
-    return Ok(TcpStream::connect(format!("127.0.0.1:{}", port))?);
+    let address = format!("127.0.0.1:{}", port);
+    println!("Spawned new server at {address}, connecting");
+
+    return Ok(TcpStream::connect(address)?);
 }
 
 pub fn connect_or_spawn_server(port: Option<u16>) -> Result<(), ClientError> {

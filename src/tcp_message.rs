@@ -1,27 +1,50 @@
 use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use std::{io::Cursor, net::SocketAddr};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub enum TcpMessage {
-    Chat(String),
-    Leaving,
-    Nothing,
+    Chat(SocketAddr, String),
+    Leaving(SocketAddr),
+    Nothing(SocketAddr),
+}
+
+#[derive(Debug)]
+pub enum TcpMessageError {
+    MalformedMessage,
+    SerializationFailure,
 }
 
 impl TcpMessage {
-    pub fn from_bytes(buf: &[u8]) -> TcpMessage {
+    pub fn from_bytes(buf: &[u8]) -> Result<TcpMessage, TcpMessageError> {
         let mut de = Deserializer::new(Cursor::new(buf));
-        let message: TcpMessage = Deserialize::deserialize(&mut de).unwrap();
+        let message: TcpMessage =
+            Deserialize::deserialize(&mut de).map_err(|_| TcpMessageError::MalformedMessage)?;
 
-        return message;
+        return Ok(message);
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, TcpMessageError> {
         let mut buf = Vec::new();
         let mut se = Serializer::new(&mut buf);
-        self.serialize(&mut se).unwrap();
+        self.serialize(&mut se)
+            .map_err(|_| TcpMessageError::SerializationFailure)?;
 
-        return buf;
+        return Ok(buf);
+    }
+
+    pub fn is_leaving(&self) -> bool {
+        return match self {
+            TcpMessage::Leaving(_) => true,
+            _ => false,
+        };
+    }
+
+    pub fn get_address(&self) -> SocketAddr {
+        match self {
+            TcpMessage::Chat(addr, _) => *addr,
+            TcpMessage::Leaving(addr) => *addr,
+            TcpMessage::Nothing(addr) => *addr,
+        }
     }
 }

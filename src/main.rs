@@ -1,16 +1,12 @@
 use std::str;
-
 mod client;
 mod server;
 mod tcp_message;
-
+use clap::{Parser, Subcommand};
 use client::ClientError;
 use server::ServerError;
-use tcp_message::TcpMessage;
-
 use std::path::PathBuf;
-
-use clap::{Parser, Subcommand};
+use tcp_message::TcpMessage;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -31,6 +27,8 @@ enum Commands {
         shutdown_after_last: bool,
         #[arg(short, long)]
         silent: bool,
+        #[arg(short = 'P', long)]
+        print_port: bool,
         #[arg(short, long)]
         port: Option<u16>,
     },
@@ -63,7 +61,8 @@ fn main() -> Result<(), Error> {
             port,
             shutdown_after_last,
             silent,
-        } => server::serve(port, shutdown_after_last, silent)?,
+            print_port,
+        } => server::serve(port, shutdown_after_last, silent, print_port)?,
     };
 
     Ok(())

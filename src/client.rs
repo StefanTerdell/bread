@@ -36,7 +36,7 @@ pub fn connect(stream: TcpStream) -> Result<(), ClientError> {
         io::stdin().read_line(&mut buf)?;
         buf.truncate(buf.len() - 2);
 
-        let msg = if buf.len() == 0 {
+        let msg = if buf.is_empty() {
             TcpMessage::Nothing(address)
         } else if buf == ".exit" {
             TcpMessage::Leaving(address)
@@ -44,7 +44,7 @@ pub fn connect(stream: TcpStream) -> Result<(), ClientError> {
             TcpMessage::Chat(address, buf.clone())
         };
 
-        stream.as_ref().write(&msg.to_bytes()?)?;
+        stream.as_ref().write_all(&msg.to_bytes()?)?;
 
         if msg.is_leaving() {
             print_thread.join().expect("🦄")?;
@@ -66,19 +66,19 @@ pub enum ClientError {
 
 impl From<io::Error> for ClientError {
     fn from(err: io::Error) -> ClientError {
-        return ClientError::Io(err);
+        ClientError::Io(err)
     }
 }
 
 impl From<Utf8Error> for ClientError {
     fn from(err: Utf8Error) -> ClientError {
-        return ClientError::Conversion(err);
+        ClientError::Conversion(err)
     }
 }
 
 impl From<TcpMessageError> for ClientError {
     fn from(err: TcpMessageError) -> ClientError {
-        return ClientError::Message(err);
+        ClientError::Message(err)
     }
 }
 
@@ -88,7 +88,7 @@ fn spawn_server(port: u16) -> Result<TcpStream, ClientError> {
         format!("{path}bread serve --port {port} --shutdown-after-last --silent --print-port");
 
     let mut child = Command::new("cmd")
-        .args(&["/C", &command])
+        .args(["/C", &command])
         .stdout(Stdio::piped())
         // .stderr(Stdio::null())
         .spawn()?;
@@ -104,7 +104,7 @@ fn spawn_server(port: u16) -> Result<TcpStream, ClientError> {
 
         if message.starts_with(&port.to_string()) {
             break;
-        } else if message != "" {
+        } else if !message.is_empty() {
             return Err(ClientError::UnknownServerMessage(
                 format!("Unknown message from server: {:?}", message).to_string(),
             ));
@@ -114,7 +114,7 @@ fn spawn_server(port: u16) -> Result<TcpStream, ClientError> {
     let address = format!("127.0.0.1:{}", port);
     println!("Spawned new server at {address}, connecting");
 
-    return Ok(TcpStream::connect(address)?);
+    Ok(TcpStream::connect(address)?)
 }
 
 pub fn connect_or_spawn_server(port: Option<u16>) -> Result<(), ClientError> {

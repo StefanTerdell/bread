@@ -42,13 +42,13 @@ enum Error {
 
 impl From<ClientError> for Error {
     fn from(err: ClientError) -> Error {
-        return Error::Client(err);
+        Error::Client(err)
     }
 }
 
 impl From<ServerError> for Error {
     fn from(err: ServerError) -> Error {
-        return Error::Server(err);
+        Error::Server(err)
     }
 }
 

@@ -25,25 +25,25 @@ pub enum ServerError {
 
 impl From<io::Error> for ServerError {
     fn from(err: io::Error) -> ServerError {
-        return ServerError::Io(err);
+        ServerError::Io(err)
     }
 }
 
 impl From<SendError<MpscMessage>> for ServerError {
     fn from(err: SendError<MpscMessage>) -> ServerError {
-        return ServerError::MpscS(err);
+        ServerError::MpscS(err)
     }
 }
 
 impl From<RecvError> for ServerError {
     fn from(err: RecvError) -> ServerError {
-        return ServerError::MpscR(err);
+        ServerError::MpscR(err)
     }
 }
 
 impl From<TcpMessageError> for ServerError {
     fn from(err: TcpMessageError) -> ServerError {
-        return ServerError::Message(err);
+        ServerError::Message(err)
     }
 }
 
@@ -67,7 +67,7 @@ fn stream_host(
                 let msg = msg.to_bytes()?;
 
                 for stream in streams.values() {
-                    stream.as_ref().write(&msg)?;
+                    stream.as_ref().write_all(&msg)?;
                 }
             }
             MpscMessage::Disconnect(address) => {
@@ -77,7 +77,7 @@ fn stream_host(
                     println!("Client disconnected. Current count: {}", streams.len());
                 }
 
-                if streams.len() == 0 && shutdown_after_last {
+                if streams.is_empty() && shutdown_after_last {
                     if !silent {
                         println!("Last connection left! Shutting down 🦄");
                     }
@@ -102,11 +102,7 @@ fn stream_handler(
     loop {
         let bytes = stream.as_ref().read(&mut buf)?;
         let msg = TcpMessage::from_bytes(&buf[0..bytes])?;
-
-        let is_leaving = match msg {
-            TcpMessage::Leaving(_) => true,
-            _ => false,
-        };
+        let is_leaving = msg.is_leaving();
 
         mpsc_sender.send(MpscMessage::Message(addr, msg))?;
 

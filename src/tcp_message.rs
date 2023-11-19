@@ -21,7 +21,7 @@ impl TcpMessage {
         let message: TcpMessage =
             Deserialize::deserialize(&mut de).map_err(|_| TcpMessageError::MalformedMessage)?;
 
-        return Ok(message);
+        Ok(message)
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, TcpMessageError> {
@@ -30,14 +30,11 @@ impl TcpMessage {
         self.serialize(&mut se)
             .map_err(|_| TcpMessageError::SerializationFailure)?;
 
-        return Ok(buf);
+        Ok(buf)
     }
 
     pub fn is_leaving(&self) -> bool {
-        return match self {
-            TcpMessage::Leaving(_) => true,
-            _ => false,
-        };
+        matches!(self, TcpMessage::Leaving(_))
     }
 
     pub fn get_address(&self) -> SocketAddr {

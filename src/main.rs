@@ -2,9 +2,8 @@ use std::str;
 mod client;
 mod server;
 mod tcp_message;
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use client::ClientError;
-use server::ServerError;
 use std::path::PathBuf;
 use tcp_message::TcpMessage;
 
@@ -34,25 +33,7 @@ enum Commands {
     },
 }
 
-#[derive(Debug)]
-enum Error {
-    Client(ClientError),
-    Server(ServerError),
-}
-
-impl From<ClientError> for Error {
-    fn from(err: ClientError) -> Error {
-        Error::Client(err)
-    }
-}
-
-impl From<ServerError> for Error {
-    fn from(err: ServerError) -> Error {
-        Error::Server(err)
-    }
-}
-
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match *cli.command {

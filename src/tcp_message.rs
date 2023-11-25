@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::{io::Cursor, net::SocketAddr};
@@ -9,26 +10,18 @@ pub enum TcpMessage {
     Nothing(SocketAddr),
 }
 
-#[derive(Debug)]
-pub enum TcpMessageError {
-    MalformedMessage,
-    SerializationFailure,
-}
-
 impl TcpMessage {
-    pub fn from_bytes(buf: &[u8]) -> Result<TcpMessage, TcpMessageError> {
+    pub fn from_bytes(buf: &[u8]) -> Result<TcpMessage> {
         let mut de = Deserializer::new(Cursor::new(buf));
-        let message: TcpMessage =
-            Deserialize::deserialize(&mut de).map_err(|_| TcpMessageError::MalformedMessage)?;
+        let message: TcpMessage = Deserialize::deserialize(&mut de)?;
 
         Ok(message)
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, TcpMessageError> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
         let mut se = Serializer::new(&mut buf);
-        self.serialize(&mut se)
-            .map_err(|_| TcpMessageError::SerializationFailure)?;
+        self.serialize(&mut se)?;
 
         Ok(buf)
     }

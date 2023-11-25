@@ -13,6 +13,7 @@ pub enum MpscMessage {
     Connect(SocketAddr, Arc<TcpStream>),
     Message(SocketAddr, TcpMessage),
     Disconnect(SocketAddr),
+    Error(SocketAddr, Box<ServerError>),
 }
 
 #[derive(Debug)]
@@ -70,21 +71,32 @@ fn stream_host(
                     stream.as_ref().write_all(&msg)?;
                 }
             }
+            MpscMessage::Error(address, error) => {
+                streams.remove(&address);
+
+                if !silent {
+                    eprintln!(
+                        "Client disconnected due to error. Current count: {}. Error: {:?}",
+                        streams.len(),
+                        *error
+                    );
+                }
+            }
             MpscMessage::Disconnect(address) => {
                 streams.remove(&address);
 
                 if !silent {
                     println!("Client disconnected. Current count: {}", streams.len());
                 }
-
-                if streams.is_empty() && shutdown_after_last {
-                    if !silent {
-                        println!("Last connection left! Shutting down 🦄");
-                    }
-                    break;
-                }
             }
         };
+
+        if streams.is_empty() && shutdown_after_last {
+            if !silent {
+                println!("No connections left! Shutting down ✌");
+            }
+            break;
+        }
     }
 
     Ok(())
@@ -94,8 +106,22 @@ fn stream_handler(
     mpsc_sender: Sender<MpscMessage>,
     stream: Arc<TcpStream>,
 ) -> Result<(), ServerError> {
-    let mut buf = [0u8; 1024];
     let addr = stream.peer_addr()?;
+    let send_error = mpsc_sender.clone();
+
+    if let Err(err) = stream_reader(mpsc_sender, stream, addr) {
+        send_error.send(MpscMessage::Error(addr, Box::new(err)))?;
+    }
+
+    Ok(())
+}
+
+fn stream_reader(
+    mpsc_sender: Sender<MpscMessage>,
+    stream: Arc<TcpStream>,
+    addr: SocketAddr,
+) -> Result<(), ServerError> {
+    let mut buf = [0u8; 1024];
 
     mpsc_sender.send(MpscMessage::Connect(addr, stream.clone()))?;
 
